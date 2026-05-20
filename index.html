@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FileVault — Upload & Kelola File</title>
+    
+    <!-- Supabase CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <style>
+        /* ===== RESET & BASE ===== */
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg-primary: #0f0f14;
+            --bg-secondary: #1a1a24;
+            --bg-card: #22222e;
+            --bg-hover: #2a2a3a;
+            --accent: #7c5cfc;
+            --accent-light: #9b80ff;
+            --accent-glow: rgba(124, 92, 252, 0.25);
+            --text-primary: #f0f0f5;
+            --text-secondary: #8888a0;
+            --text-muted: #55556a;
+            --border: #2e2e3e;
+            --success: #34d399;
+            --danger: #f87171;
+            --warning: #fbbf24;
+            --radius: 16px;
+            --radius-sm: 10px;
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* ===== BACKGROUND DECORATION ===== */
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background: radial-gradient(ellipse at 30% 20%, rgba(124, 92, 252, 0.06) 0%, transparent 50%),
+                        radial-gradient(ellipse at 70% 80%, rgba(52, 211, 153, 0.04) 0%, transparent 50%);
+            z-index: 0; pointer-events: none;
+        }
+
+        /* ===== HEADER ===== */
+        header {
+            position: sticky; top: 0; z-index: 100;
+            background: rgba(15, 15, 20, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+            padding: 0 20px;
+        }
+
+        .header-inner {
+            max-width: 900px; margin: 0 auto;
+            display: flex; align-items: center; justify-content: space-between;
+            height: 64px;
+        }
+
+        .logo {
+            display: flex; align-items: center; gap: 10px;
+            text-decoration: none;
+        }
+
+        .logo-icon {
+            width: 38px; height: 38px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-light));
+            border-radius: var(--radius-sm);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px;
+            box-shadow: 0 4px 15px var(--accent-glow);
+        }
+
+        .logo-text {
+            font-size: 1.25rem; font-weight: 700;
+            color: var(--text-primary); letter-spacing: -0.5px;
+        }
+        .logo-text span { color: var(--accent-light); }
+
+        .header-stats {
+            display: flex; align-items: center; gap: 6px;
+            background: var(--bg-secondary);
+            padding: 6px 14px; border-radius: 50px;
+            font-size: 0.8rem; color: var(--text-secondary);
+            border: 1px solid var(--border);
+        }
+
+        .header-stats .dot {
+            width: 8px; height: 8px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+        /* ===== MAIN CONTAINER ===== */
+        .container {
+            max-width: 900px; margin: 0 auto;
+            padding: 24px 20px 80px;
+            position: relative; z-index: 1;
+        }
+
+        /* ===== SECTION TITLE ===== */
+        .section-title {
+            display: flex; align-items: center; gap: 12px;
+            margin-bottom: 20px;
+        }
+        .section-title h2 {
+            font-size: 1.1rem; font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase; letter-spacing: 1.5px;
+        }
+        .section-title .line {
+            flex: 1; height: 1px;
+            background: linear-gradient(to right, var(--border), transparent);
+        }
+
+        /* ===== UPLOAD ZONE ===== */
+        .upload-zone {
+            background: var(--bg-secondary);
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+            padding: 48px 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: var(--transition);
+            position: relative; overflow: hidden;
+        }
+
+        .upload-zone::before {
+            content: ''; position: absolute; inset: 0;
+            background: radial-gradient(circle at center, var(--accent-glow), transparent 70%);
+            opacity: 0; transition: var(--transition);
+        }
+
+        .upload-zone:hover, .upload-zone.drag-over {
+            border-color: var(--accent);
+            background: var(--bg-card);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+        .upload-zone:hover::before, .upload-zone.drag-over::before { opacity: 1; }
+
+        .upload-icon {
+            position: relative; z-index: 1;
+            width: 72px; height: 72px; margin: 0 auto 20px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-light));
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 8px 25px var(--accent-glow);
+            transition: var(--transition);
+        }
+        .upload-zone:hover .upload-icon {
+            transform: scale(1.08);
+            box-shadow: 0 12px 35px rgba(124, 92, 252, 0.35);
+        }
+        .upload-icon svg {
+            width: 32px; height: 32px; stroke: white; fill: none;
+            stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+        }
+
+        .upload-zone h3 {
+            position: relative; z-index: 1;
+            font-size: 1.15rem; font-weight: 600;
+            margin-bottom: 8px; color: var(--text-primary);
+        }
+        .upload-zone p {
+            position: relative; z-index: 1;
+            font-size: 0.88rem; color: var(--text-muted);
+        }
+        .upload-zone .browse-link {
+            color: var(--accent-light);
+            text-decoration: underline; cursor: pointer;
+        }
+
+        #file-input { display: none; }
+
+        /* ===== UPLOAD PROGRESS ===== */
+        .upload-progress {
+            display: none; margin-top: 16px;
+            position: relative; z-index: 1;
+        }
+        .upload-progress.active { display: block; }
+
+        .progress-bar-bg {
+            width: 100%; height: 4px;
+            background: var(--bg-primary);
+            border-radius: 4px; overflow: hidden;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), var(--success));
+            border-radius: 4px; width: 0%;
+            transition: width 0.3s ease;
+        }
+        .progress-text {
+            font-size: 0.78rem; color: var(--text-secondary);
+            margin-top: 6px;
+        }
+
+        /* ===== STATUS MESSAGE ===== */
+        .status-message {
+            margin-top: 12px;
+            padding: 10px 16px;
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            display: none;
+        }
+        .status-message.show { display: block; animation: fadeIn 0.3s ease; }
+        .status-message.success {
+            background: rgba(52, 211, 153, 0.15);
+            border: 1px solid rgba(52, 211, 153, 0.3);
+            color: var(--success);
+        }
+        .status-message.error {
+            background: rgba(248, 113, 113, 0.15);
+            border: 1px solid rgba(248, 113, 113, 0.3);
+            color: var(--danger);
+        }
+        .status-message.loading {
+            background: rgba(124, 92, 252, 0.15);
+            border: 1px solid rgba(124, 92, 252, 0.3);
+            color: var(--accent-light);
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* ===== FILE LIST SECTION ===== */
+        .files-section { margin-top: 40px; }
+
+        .empty-state {
+            text-align: center; padding: 60px 20px;
+            color: var(--text-muted);
+        }
+        .empty-state .empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+        .empty-state h3 { font-size: 1.05rem; color: var(--text-secondary); margin-bottom: 6px; }
+        .empty-state p { font-size: 0.85rem; }
+
+        /* ===== FILE CARDS ===== */
+        .file-grid { display: grid; gap: 12px; }
+
+        .file-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            transition: var(--transition);
+            animation: fadeInUp 0.4s ease forwards;
+            opacity: 0;
+        }
+        .file-card:hover {
+            border-color: var(--accent);
+            background: var(--bg-card);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .file-card-inner { display: flex; align-items: stretch; }
+
+        /* File Preview */
+        .file-preview {
+            width: 90px; min-height: 90px;
+            background: var(--bg-primary);
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0; position: relative; overflow: hidden;
+        }
+        .file-preview img {
+            width: 100%; height: 100%;
+            object-fit: cover; cursor: pointer;
+        }
+        .file-preview .file-type-icon {
+            display: flex; flex-direction: column;
+            align-items: center; gap: 4px; padding: 12px;
+        }
+        .file-type-icon .icon { font-size: 28px; }
+        .file-type-icon .ext {
+            font-size: 0.65rem; font-weight: 700;
+            text-transform: uppercase; color: var(--text-muted);
+            letter-spacing: 0.5px;
+        }
+        .file-preview .badge {
+            position: absolute; top: 6px; left: 6px;
+            padding: 2px 8px; border-radius: 50px;
+            font-size: 0.65rem; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .badge-image { background: rgba(124, 92, 252, 0.2); color: var(--accent-light); }
+        .badge-pdf { background: rgba(248, 113, 113, 0.2); color: var(--danger); }
+        .badge-doc { background: rgba(96, 165, 250, 0.2); color: #60a5fa; }
+        .badge-video { background: rgba(251, 191, 36, 0.2); color: #fbbf24; }
+        .badge-audio { background: rgba(52, 211, 153, 0.2); color: var(--success); }
+        .badge-archive { background: rgba(251, 146, 60, 0.2); color: #fb923c; }
+        .badge-other { background: rgba(136, 136, 160, 0.2); color: var(--text-secondary); }
+
+        /* File Info */
+        .file-info {
+            flex: 1; padding: 14px 16px;
+            display: flex; flex-direction: column;
+            justify-content: center; min-width: 0;
+        }
+        .file-name {
+            font-size: 0.92rem; font-weight: 600;
+            color: var(--text-primary);
+            white-space: nowrap; overflow: hidden;
+            text-overflow: ellipsis; margin-bottom: 4px;
+        }
+        .file-name a {
+            color: inherit; text-decoration: none;
+        }
+        .file-name a:hover { color: var(--accent-light); }
+        .file-meta {
+            display: flex; align-items: center; gap: 12px;
+            font-size: 0.78rem; color: var(--text-muted);
+        }
+        .file-meta span {
+            display: flex; align-items: center; gap: 4px;
+        }
+
+        /* File Actions */
+        .file-actions {
+            display: flex; align-items: center;
+            padding: 8px; gap: 4px;
+        }
+        .btn-action {
+            width: 36px; height: 36px;
+            border: none; background: transparent;
+            color: var(--text-secondary);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: var(--transition); font-size: 16px;
+        }
+        .btn-action:hover { background: var(--bg-hover); color: var(--text-primary); }
+        .btn-action.btn-delete:hover {
+            background: rgba(248, 113, 113, 0.15); color: var(--danger);
+        }
+        .btn-action.btn-download:hover {
+            background: rgba(52, 211, 153, 0.15); color: var(--success);
+        }
+        .btn-action:disabled {
+            opacity: 0.5; cursor: not-allowed;
+        }
+
+        /* ===== IMAGE MODAL ===== */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0;
+            z-index: 1000; background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(10px);
+            align-items: center; justify-content: center;
+            padding: 20px; animation: fadeIn 0.2s ease;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal-content {
+            max-width: 90vw; max-height: 85vh;
+            border-radius: var(--radius); overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            animation: scaleIn 0.3s ease;
+        }
+        @keyframes scaleIn {
+            from { transform: scale(0.9); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        .modal-content img {
+            max-width: 90vw; max-height: 85vh;
+            object-fit: contain; display: block;
+        }
+        .modal-close {
+            position: fixed; top: 20px; right: 20px;
+            width: 44px; height: 44px; border: none;
+            background: rgba(255, 255, 255, 0.1);
+            color: white; border-radius: 50%;
+            font-size: 22px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: var(--transition); backdrop-filter: blur(10px);
+        }
+        .modal-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: rotate(90deg);
+        }
+
+        /* ===== TOAST NOTIFICATION ===== */
+        .toast-container {
+            position: fixed; bottom: 24px; right: 24px;
+            z-index: 2000; display: flex;
+            flex-direction: column; gap: 8px;
+        }
+        .toast {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 12px 20px;
+            display: flex; align-items: center; gap: 10px;
+            box-shadow: var(--shadow);
+            animation: slideInRight 0.3s ease, fadeOut 0.3s ease 2.7s forwards;
+            min-width: 250px;
+        }
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes fadeOut {
+            to { opacity: 0; transform: translateY(10px); }
+        }
+        .toast-icon { font-size: 18px; }
+        .toast-message { font-size: 0.85rem; color: var(--text-primary); }
+        .toast.success { border-left: 3px solid var(--success); }
+        .toast.error { border-left: 3px solid var(--danger); }
+        .toast.warning { border-left: 3px solid var(--warning); }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 640px) {
+            .header-inner { height: 56px; }
+            .logo-text { font-size: 1.1rem; }
+            .header-stats { display: none; }
+            .container { padding: 16px 16px 80px; }
+            .upload-zone { padding: 36px 20px; }
+            .upload-icon { width: 60px; height: 60px; }
+            .upload-icon svg { width: 26px; height: 26px; }
+            .upload-zone h3 { font-size: 1rem; }
+            .file-card-inner { flex-direction: column; }
+            .file-preview {
+                width: 100%; min-height: 120px; max-height: 200px;
+            }
+            .file-actions {
+                justify-content: flex-end;
+                padding: 8px 16px 14px;
+                border-top: 1px solid var(--border);
+            }
+            .toast-container { left: 16px; right: 16px; bottom: 16px; }
+            .toast { min-width: unset; }
+        }
+
+        /* ===== SCROLLBAR ===== */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-primary); }
+        ::-webkit-scrollbar-thumb {
+            background: var(--border); border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+        /* ===== SEARCH / FILTER ===== */
+        .toolbar {
+            display: flex; gap: 10px; margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .search-box {
+            flex: 1; min-width: 200px; position: relative;
+        }
+        .search-box input {
+            width: 100%; padding: 10px 16px 10px 42px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 50px; color: var(--text-primary);
+            font-size: 0.88rem; outline: none;
+            transition: var(--transition);
+        }
+        .search-box input::placeholder { color: var(--text-muted); }
+        .search-box input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+        .search-box .search-icon {
+            position: absolute; left: 14px; top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted); font-size: 16px;
+            pointer-events: none;
+        }
+        .filter-btn {
+            padding: 10px 18px; background: var(--bg-secondary);
+            border: 1px solid var(--border); border-radius: 50px;
+            color: var(--text-secondary); font-size: 0.82rem;
+            cursor: pointer; transition: var(--transition);
+            white-space: nowrap;
+        }
+        .filter-btn:hover, .filter-btn.active {
+            border-color: var(--accent); color: var(--accent-light);
+            background: rgba(124, 92, 252, 0.08);
+        }
+
+        /* ===== CLEAR ALL ===== */
+        .clear-all-btn {
+            margin-top: 20px; padding: 10px 24px;
+            background: transparent; border: 1px solid var(--border);
+            border-radius: 50px; color: var(--text-muted);
+            font-size: 0.82rem; cursor: pointer;
+            transition: var(--transition);
+            display: inline-flex; align-items: center; gap: 6px;
+        }
+        .clear-all-btn:hover {
+            border-color: var(--danger); color: var(--danger);
+            background: rgba(248, 113, 113, 0.08);
+        }
+
+        /* ===== SIZE INDICATOR ===== */
+        .size-indicator {
+            display: inline-block; width: 6px; height: 6px;
+            border-radius: 50%; margin-right: 4px;
+        }
+        .size-small { background: var(--success); }
+        .size-medium { background: #fbbf24; }
+        .size-large { background: var(--danger); }
+
+        /* ===== LOADING SPINNER ===== */
+        .spinner {
+            width: 16px; height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: var(--accent-light);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <!-- HEADER -->
+    <header>
+        <div class="header-inner">
+            <a href="#" class="logo">
+                <div class="logo-icon">📁</div>
+                <div class="logo-text">File<span>Vault</span></div>
+            </a>
+            <div class="header-stats">
+                <span class="dot"></span>
+                <span id="total-files">0 file</span>
+                <span>•</span>
+                <span id="total-size">0 B</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN -->
+    <div class="container">
+
+        <!-- Upload Zone -->
+        <div class="section-title">
+            <h2>Upload File</h2>
+            <div class="line"></div>
+        </div>
+
+        <div class="upload-zone" id="upload-zone">
+            <div class="upload-icon">
+                <svg viewBox="0 0 24 24">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+            </div>
+            <h3>Seret & Lepas File di Sini</h3>
+            <p>atau <span class="browse-link">telusuri file</span> dari perangkat Anda</p>
+            <input type="file" id="file-input" multiple>
+            
+            <div class="upload-progress" id="upload-progress">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" id="progress-fill"></div>
+                </div>
+                <div class="progress-text" id="progress-text">Mengupload...</div>
+            </div>
+            
+            <div class="status-message" id="status-message"></div>
+        </div>
+
+        <!-- File List -->
+        <div class="files-section">
+            <div class="section-title">
+                <h2>File Tersimpan</h2>
+                <div class="line"></div>
+            </div>
+
+            <!-- Toolbar -->
+            <div class="toolbar">
+                <div class="search-box">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="search-input" placeholder="Cari file...">
+                </div>
+                <button class="filter-btn active" data-filter="all">Semua</button>
+                <button class="filter-btn" data-filter="image">Gambar</button>
+                <button class="filter-btn" data-filter="document">Dokumen</button>
+                <button class="filter-btn" data-filter="video">Video</button>
+                <button class="filter-btn" data-filter="audio">Audio</button>
+            </div>
+
+            <!-- File Grid -->
+            <div class="file-grid" id="file-grid">
+                <div class="empty-state" id="empty-state">
+                    <div class="empty-icon">📂</div>
+                    <h3>Belum ada file</h3>
+                    <p>Upload file pertama Anda untuk memulai</p>
+                </div>
+            </div>
+
+            <button class="clear-all-btn" id="clear-all" style="display:none;">
+                🗑️ Hapus Semua File
+            </button>
+        </div>
+    </div>
+
+    <!-- Image Modal -->
+    <div class="modal-overlay" id="modal">
+        <button class="modal-close" id="modal-close">✕</button>
+        <div class="modal-content">
+            <img id="modal-image" src="" alt="Preview">
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script>
+        // ============================================
+        // 1. KONFIGURASI SUPABASE
+        // ============================================
+        const SUPABASE_URL = 'https://fdavkqhkbqspifoinsvi.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZkYXZrcWhrYnFzcGlmb2luc3ZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNjEwOTUsImV4cCI6MjA5NDgzNzA5NX0.bVWoQUmNaQCXjHpEzgrQSI7Ps_wvasCuoNk6zzlaN-g'; // ⚠️ Ganti dengan key Anda
+        const BUCKET_NAME = 'images'; // ⚠️ Ganti dengan nama bucket Anda
+        const UPLOAD_FOLDER = 'uploads'; // Folder di dalam bucket
+
+        let supabaseClient;
+        let isSupabaseReady = false;
+
+        // Inisialisasi Supabase
+        try {
+            if (window.supabase?.createClient) {
+                supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                isSupabaseReady = true;
+                console.log('✅ Supabase client initialized');
+            } else {
+                throw new Error("Library Supabase tidak ditemukan");
+            }
+        } catch (err) {
+            console.error('❌ Supabase init error:', err);
+            showToast('Gagal koneksi ke Supabase. Periksa konfigurasi.', 'error');
+        }
+
+        // ============================================
+        // 2. DOM ELEMENTS
+        // ============================================
+        const uploadZone = document.getElementById('upload-zone');
+        const fileInput = document.getElementById('file-input');
+        const fileGrid = document.getElementById('file-grid');
+        const emptyState = document.getElementById('empty-state');
+        const clearAllBtn = document.getElementById('clear-all');
+        const searchInput = document.getElementById('search-input');
+        const totalFilesEl = document.getElementById('total-files');
+        const totalSizeEl = document.getElementById('total-size');
+        const modal = document.getElementById('modal');
+        const modalImage = document.getElementById('modal-image');
+        const modalClose = document.getElementById('modal-close');
+        const uploadProgress = document.getElementById('upload-progress');
+        const progressFill = document.getElementById('progress-fill');
+        const progressText = document.getElementById('progress-text');
+        const toastContainer = document.getElementById('toast-container');
+        const filterBtns = document.querySelectorAll('.filter-btn');
+        const statusMessage = document.getElementById('status-message');
+
+        // State
+        let files = [];
+        let currentFilter = 'all';
+        let searchQuery = '';
+
+        // ============================================
+        // 3. UTILITY FUNCTIONS
+        // ============================================
+        function formatSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function formatDate(timestamp) {
+            return new Date(timestamp).toLocaleDateString('id-ID', {
+                day: 'numeric', month: 'short', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            });
+        }
+
+        function getFileCategory(type, name = '') {
+            if (!type && name) {
+                const ext = name.split('.').pop().toLowerCase();
+                if (['jpg','jpeg','png','gif','webp','svg'].includes(ext)) return 'image';
+                if (ext === 'pdf') return 'pdf';
+                if (['doc','docx','xls','xlsx','ppt','pptx','txt','rtf'].includes(ext)) return 'document';
+                if (['mp4','avi','mov','mkv','webm'].includes(ext)) return 'video';
+                if (['mp3','wav','ogg','flac'].includes(ext)) return 'audio';
+                if (['zip','rar','7z','tar','gz'].includes(ext)) return 'archive';
+            }
+            if (type?.startsWith('image/')) return 'image';
+            if (type === 'application/pdf') return 'pdf';
+            if (type?.startsWith('video/')) return 'video';
+            if (type?.startsWith('audio/')) return 'audio';
+            if (type?.includes('word') || type?.includes('excel') || type?.includes('powerpoint') || type?.includes('text/')) return 'document';
+            if (type?.includes('zip') || type?.includes('compressed')) return 'archive';
+            return 'other';
+        }
+
+        function getFileExtension(name) {
+            return name.split('.').pop().toUpperCase();
+        }
+
+        function getFileIcon(category) {
+            const icons = {
+                image: '🖼️', pdf: '📕', document: '📄',
+                video: '🎬', audio: '🎵', archive: '📦', other: '📎'
+            };
+            return icons[category] || icons.other;
+        }
+
+        function getSizeClass(bytes) {
+            if (bytes < 1024 * 500) return 'small';
+            if (bytes < 1024 * 1024 * 5) return 'medium';
+            return 'large';
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `
+                <span class="toast-icon">${type === 'success' ? '✅' : type === 'error' ? '❌' : '⚠️'}</span>
+                <span class="toast-message">${message}</span>
+            `;
+            toastContainer.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        function showStatus(message, type) {
+            statusMessage.textContent = message;
+            statusMessage.className = `status-message ${type} show`;
+            if (type !== 'loading') {
+                setTimeout(() => {
+                    statusMessage.classList.remove('show');
+                }, 4000);
+            }
+        }
+
+        // ============================================
+        // 4. SUPABASE FUNCTIONS
+        // ============================================
+        
+        // Ambil daftar file dari Supabase Storage
+        async function fetchFiles() {
+            if (!isSupabaseReady || !supabaseClient) {
+                emptyState.innerHTML = `
+                    <div class="empty-icon">⚠️</div>
+                    <h3>Koneksi Supabase Gagal</h3>
+                    <p>Periksa konfigurasi SUPABASE_URL, SUPABASE_ANON_KEY, dan BUCKET_NAME</p>
+                `;
+                emptyState.style.display = 'block';
+                return;
+            }
+
+            emptyState.innerHTML = '<div class="spinner"></div><p>Memuat file...</p>';
+            emptyState.style.display = 'block';
+            fileGrid.querySelectorAll('.file-card').forEach(c => c.remove());
+
+            try {
+                const { data, error } = await supabaseClient.storage
+                    .from(BUCKET_NAME)
+                    .list(UPLOAD_FOLDER, { 
+                        limit: 100,
+                        sortBy: { column: 'created_at', order: 'desc' }
+                    });
+
+                if (error) throw error;
+
+                files = (data || []).filter(f => f.name !== '.emptyFolderPlaceholder').map(file => {
+                    const fullPath = `${UPLOAD_FOLDER}/${file.name}`;
+                    const { data: urlData } = supabaseClient.storage
+                        .from(BUCKET_NAME)
+                        .getPublicUrl(fullPath);
+                    
+                    return {
+                        id: file.name,
+                        name: file.name,
+                        path: fullPath,
+                        type: file.metadata?.mimetype || '',
+                        size: file.metadata?.size || file.metadata?.contentLength || 0,
+                        uploadedAt: new Date(file.created_at).getTime(),
+                        publicUrl: urlData?.publicUrl
+                    };
+                });
+
+                renderFiles();
+
+            } catch (error) {
+                console.error('Gagal mengambil file:', error);
+                emptyState.innerHTML = `
+                    <div class="empty-icon">❌</div>
+                    <h3>Gagal Memuat File</h3>
+                    <p>${error.message}</p>
+                `;
+                showToast('Gagal memuat daftar file', 'error');
+            }
+        }
+
+        // Upload file ke Supabase
+        async function uploadFile(file) {
+            if (!isSupabaseReady) throw new Error('Supabase tidak terinisialisasi');
+
+            const uniqueName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${file.name}`;
+            const filePath = `${UPLOAD_FOLDER}/${uniqueName}`;
+
+            const { data, error } = await supabaseClient.storage
+                .from(BUCKET_NAME)
+                .upload(filePath, file, {
+                    cacheControl: '3600',
+                    upsert: false,
+                    contentType: file.type || 'application/octet-stream'
+                });
+
+            if (error) throw error;
+            return { name: uniqueName, path: filePath, ...data };
+        }
+
+        // Hapus file dari Supabase
+        async function deleteFileFromStorage(path) {
+            if (!isSupabaseReady) throw new Error('Supabase tidak terinisialisasi');
+            
+            const { error } = await supabaseClient.storage
+                .from(BUCKET_NAME)
+                .remove([path]);
+            
+            if (error) throw error;
+        }
+
+        // ============================================
+        // 5. RENDER FILES
+        // ============================================
+        function renderFiles() {
+            fileGrid.querySelectorAll('.file-card').forEach(c => c.remove());
+
+            let filteredFiles = files.filter(f => {
+                const matchFilter = currentFilter === 'all' || getFileCategory(f.type, f.name) === currentFilter;
+                const matchSearch = f.name.toLowerCase().includes(searchQuery.toLowerCase());
+                return matchFilter && matchSearch;
+            });
+
+            if (filteredFiles.length === 0) {
+                if (files.length === 0) {
+                    emptyState.innerHTML = `
+                        <div class="empty-icon">📂</div>
+                        <h3>Belum ada file</h3>
+                        <p>Upload file pertama Anda untuk memulai</p>
+                    `;
+                } else {
+                    emptyState.innerHTML = `
+                        <div class="empty-icon">🔍</div>
+                        <h3>Tidak ditemukan</h3>
+                        <p>Tidak ada file yang cocok dengan pencarian/filter</p>
+                    `;
+                }
+                emptyState.style.display = 'block';
+                clearAllBtn.style.display = 'none';
+            } else {
+                emptyState.style.display = 'none';
+                clearAllBtn.style.display = 'inline-flex';
+
+                filteredFiles.forEach((file, index) => {
+                    const category = getFileCategory(file.type, file.name);
+                    const card = document.createElement('div');
+                    card.className = 'file-card';
+                    card.style.animationDelay = `${index * 0.05}s`;
+
+                    let previewHTML = '';
+                    if (category === 'image') {
+                        previewHTML = `<img src="${file.publicUrl}" alt="${file.name}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'file-type-icon\\'><span class=\\'icon\\'>🖼️</span><span class=\\'ext\\'>${getFileExtension(file.name)}</span></div>'">`;
+                    } else {
+                        previewHTML = `
+                            <div class="file-type-icon">
+                                <span class="icon">${getFileIcon(category)}</span>
+                                <span class="ext">${getFileExtension(file.name)}</span>
+                            </div>
+                        `;
+                    }
+
+                    const badgeClass = category === 'pdf' ? 'pdf' : category === 'document' ? 'doc' : category;
+                    const badgeText = {
+                        image: 'Gambar', pdf: 'PDF', document: 'Dokumen',
+                        video: 'Video', audio: 'Audio', archive: 'Archive', other: 'Lainnya'
+                    }[category] || 'Lainnya';
+
+                    card.innerHTML = `
+                        <div class="file-card-inner">
+                            <div class="file-preview">
+                                <span class="badge badge-${badgeClass}">${badgeText}</span>
+                                ${previewHTML}
+                            </div>
+                            <div class="file-info">
+                                <div class="file-name" title="${file.name}">
+                                    <a href="${file.publicUrl}" target="_blank">${file.name}</a>
+                                </div>
+                                <div class="file-meta">
+                                    <span>
+                                        <span class="size-indicator size-${getSizeClass(file.size)}"></span>
+                                        ${formatSize(file.size)}
+                                    </span>
+                                    <span>📅 ${formatDate(file.uploadedAt)}</span>
+                                </div>
+                            </div>
+                            <div class="file-actions">
+                                ${category === 'image' ? `<button class="btn-action" onclick="openModal('${file.publicUrl}')" title="Lihat">👁️</button>` : ''}
+                                <a href="${file.publicUrl}" download="${file.name}" class="btn-action btn-download" title="Download">⬇️</a>
+                                <button class="btn-action btn-delete" onclick="handleDelete('${file.path}', '${file.name}')" title="Hapus">🗑️</button>
+                            </div>
+                        </div>
+                    `;
+                    fileGrid.appendChild(card);
+                });
+            }
+
+            // Update stats
+            totalFilesEl.textContent = `${files.length} file`;
+            const totalBytes = files.reduce((sum, f) => sum + f.size, 0);
+            totalSizeEl.textContent = formatSize(totalBytes);
+        }
+
+        // ============================================
+        // 6. FILE ACTIONS (GLOBAL FUNCTIONS)
+        // ============================================
+        window.openModal = function(url) {
+            modalImage.src = url;
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        };
+
+        window.handleDelete = async function(path, name) {
+            if (!confirm(`Yakin ingin menghapus?`)) return;
+            
+            try {
+                await deleteFileFromStorage(path);
+                showToast(`"${name}" berhasil dihapus`);
+                fetchFiles();
+            } catch (error) {
+                console.error('Delete error:', error);
+                showToast(`Gagal menghapus: ${error.message}`, 'error');
+                showStatus('Gagal menghapus file', 'error');
+            }
+        };
+
+        // ============================================
+        // 7. UPLOAD HANDLER
+        // ============================================
+        async function handleFiles(fileList) {
+            const filesArr = Array.from(fileList);
+            if (filesArr.length === 0) return;
+
+            uploadProgress.classList.add('active');
+            showStatus('Memproses file...', 'loading');
+            let uploaded = 0;
+
+            for (const file of filesArr) {
+                try {
+                    progressText.textContent = `Mengupload ${file.name}...`;
+                    
+                    await uploadFile(file);
+                    uploaded++;
+                    
+                    const progress = (uploaded / filesArr.length) * 100;
+                    progressFill.style.width = progress + '%';
+                    
+                    showToast(`${file.name} berhasil diupload`);
+                } catch (error) {
+                    console.error(`Upload failed for ${file.name}:`, error);
+                    showToast(`❌ Gagal upload ${file.name}`, 'error');
+                    showStatus(`Gagal: ${error.message}`, 'error');
+                }
+            }
+
+            progressFill.style.width = '100%';
+            progressText.textContent = 'Selesai!';
+            
+            setTimeout(() => {
+                uploadProgress.classList.remove('active');
+                progressFill.style.width = '0%';
+                showStatus(`${uploaded} file berhasil diupload!`);
+            }, 800);
+
+            fetchFiles();
+        }
+
+        // ============================================
+        // 8. EVENT LISTENERS
+        // ============================================
+        
+        // Upload zone click
+        uploadZone.addEventListener('click', (e) => {
+            if (e.target === uploadZone || e.target.closest('.upload-icon') ||
+                e.target.tagName === 'H3' || e.target.tagName === 'P' ||
+                e.target.classList.contains('browse-link')) {
+                fileInput.click();
+            }
+        });
+
+        // File input change
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+            fileInput.value = '';
+        });
+
+        // Drag & Drop
+        ['dragover', 'dragenter'].forEach(evt => {
+            uploadZone.addEventListener(evt, (e) => {
+                e.preventDefault();
+                uploadZone.classList.add('drag-over');
+            });
+        });
+        ['dragleave', 'dragend'].forEach(evt => {
+            uploadZone.addEventListener(evt, () => {
+                uploadZone.classList.remove('drag-over');
+            });
+        });
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('drag-over');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        // Search
+        searchInput.addEventListener('input', (e) => {
+            searchQuery = e.target.value;
+            renderFiles();
+        });
+
+        // Filter buttons
+        filterBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                filterBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentFilter = btn.dataset.filter;
+                renderFiles();
+            });
+        });
+
+        // Clear all (hapus semua file dari Supabase - HATI-HATI!)
+        clearAllBtn.addEventListener('click', async () => {
+            if (!confirm('⚠️ PERINGATAN: Ini akan menghapus SEMUA file di folder uploads. Lanjutkan?')) return;
+            
+            try {
+                showStatus('Menghapus semua file...', 'loading');
+                
+                // Hapus satu per satu (Supabase remove menerima array)
+                const paths = files.map(f => f.path);
+                if (paths.length > 0) {
+                    await supabaseClient.storage.from(BUCKET_NAME).remove(paths);
+                    showToast('Semua file berhasil dihapus');
+                    fetchFiles();
+                }
+            } catch (error) {
+                console.error('Clear all error:', error);
+                showToast('Gagal menghapus semua file', 'error');
+                showStatus('Gagal menghapus file', 'error');
+            }
+        });
+
+        // Modal
+        modalClose.addEventListener('click', () => {
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
+            modalImage.src = '';
+        });
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.classList.remove('active');
+                document.body.style.overflow = '';
+                modalImage.src = '';
+            }
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                modal.classList.remove('active');
+                document.body.style.overflow = '';
+                modalImage.src = '';
+            }
+        });
+
+        // ============================================
+        // 9. INIT
+        // ============================================
+        document.addEventListener('DOMContentLoaded', () => {
+            if (isSupabaseReady) {
+                fetchFiles();
+            } else {
+                emptyState.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>
